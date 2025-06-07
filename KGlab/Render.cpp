@@ -97,7 +97,9 @@ Shader simple_texture_sh;
 
 Texture stankin_tex, vb_tex, monkey_tex;
 
-const int SNAKE_LENGTH = 20; 
+const int MAX_SNAKE_LENGTH = 100; 
+int snake_length = 3;
+int score = 0;
 float snake_radius = 0.1f;   
 float segment_distance = 0.2f;
 const double cube_size = 10;
@@ -115,7 +117,7 @@ enum Direction {
 	DIR_BACKWARD
 };
 
-SnakeSegment snake[SNAKE_LENGTH]; 
+SnakeSegment snake[MAX_SNAKE_LENGTH];
 float snake_speed = 0.6f;      
 Direction current_direction = DIR_FORWARD, next_direction = DIR_FORWARD;
 
@@ -147,10 +149,9 @@ void drawApple() {
 	gluDeleteQuadric(quad);
 }
 
-int snake_length = SNAKE_LENGTH;
-
 void initSnake() {
-
+	snake_length = 3;
+	score = 0;
 	vb_sh.VshaderFileName = "shaders/v.vert";
 	vb_sh.FshaderFileName = "shaders/vb.frag";
 	vb_sh.LoadShaderFromFile();
@@ -168,7 +169,7 @@ void initSnake() {
 
 	f.LoadModel("models//monkey.obj_m");
 
-	for (int i = 0; i < SNAKE_LENGTH; i++) {
+	for (int i = 0; i < MAX_SNAKE_LENGTH; i++) {
 		snake[i].position[0] = 0.0f;
 		snake[i].position[1] = 0.0f;
 		snake[i].position[2] = i * segment_distance;
@@ -178,13 +179,13 @@ void initSnake() {
 			snake[i].color[1] = 0.0f;
 			snake[i].color[2] = 0.0f;
 		}
-		else if (i == SNAKE_LENGTH - 1) {
+		else if (i == MAX_SNAKE_LENGTH - 1) {
 			snake[i].color[0] = 0.0f;
 			snake[i].color[1] = 0.3f;
 			snake[i].color[2] = 1.0f;
 		}
 		else {
-			float ratio = static_cast<float>(i) / SNAKE_LENGTH;
+			float ratio = static_cast<float>(i) / MAX_SNAKE_LENGTH;
 			snake[i].color[0] = 0.2f * ratio;
 			snake[i].color[1] = 0.7f - 0.5f * ratio;
 			snake[i].color[2] = 0.5f + 0.5f * ratio;
@@ -218,15 +219,16 @@ void updateSnake(double delta_time) {
 	float distance = sqrtf(dx * dx + dy * dy + dz * dz);
 
 	if (distance < snake_radius * 2) {
+		score++;
 		spawnApple();
-		if (snake_length < SNAKE_LENGTH) {
+		if (snake_length < MAX_SNAKE_LENGTH) {
 			snake[snake_length] = snake[snake_length - 1];
 			snake_length++;
 		}
 	}
 
 
-	for (int i = 0; i < SNAKE_LENGTH; i++) {
+	for (int i = snake_length - 1; i > 0; i--) {
 		float* pos = snake[i].position;
 		float diff[4];
 
@@ -239,7 +241,7 @@ void updateSnake(double delta_time) {
 			glPopMatrix();
 			continue;
 		}
-		else if (i == SNAKE_LENGTH - 1) {
+		else if (i == snake_length - 1) {
 			diff[0] = 0.0f; diff[1] = 0.3f; diff[2] = 1.0f; diff[3] = 1.0f;
 			glMaterialfv(GL_FRONT, GL_DIFFUSE, diff);
 			glPushMatrix();
@@ -259,12 +261,25 @@ void updateSnake(double delta_time) {
 		glPopMatrix();
 	}
 	for (int i = 0; i < 3; i++) {
-		if (head[i] < -cube_size / 2)
-			head[i] = cube_size / 2;
-		else if (head[i] > cube_size / 2)
-			head[i] = -cube_size / 2;
+		if (head[i] < -cube_size / 2 || head[i] > cube_size / 2) {
+			initSnake();
+			spawnApple();
+			return;     
+		}
 	}
-	for (int i = SNAKE_LENGTH - 1; i > 0; i--) {
+	for (int i = 1; i < snake_length; i++) {
+		float* segment = snake[i].position;
+		float dx = head[0] - segment[0];
+		float dy = head[1] - segment[1];
+		float dz = head[2] - segment[2];
+		float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+		if (dist < snake_radius * 1.1f) {
+			initSnake();
+			spawnApple();
+			return;
+		}
+	}
+	for (int i = snake_length - 1; i > 0; i--) {
 		float* prev = snake[i - 1].position;
 		float* curr = snake[i].position;
 		float dx = prev[0] - curr[0];
@@ -366,11 +381,12 @@ void initRender()
 	//========================================================
 	//====================Прочее==============================
 	gl.KeyDownEvent.reaction(switchModes);
-	text.setSize(512, 200);
+	text.setSize(512, 220);
 	gl.KeyDownEvent.reaction(keyControlSnake);
 	//========================================================
 
-	camera.setPosition(0.1, -8, 15);
+	camera.setPosition(0, -15, 15);
+	light.SetPosition(0, -15, 0);
 
 }
 float view_matrix[16];
@@ -509,10 +525,11 @@ void Render(double delta_time)
 	ss << L"Параметры камеры: R=" << std::setw(7) << camera.distance() << ",fi1=" << std::setw(7) << camera.fi1() << ",fi2=" << std::setw(7) << camera.fi2() << std::endl;
 	ss << L"delta_time: " << std::setprecision(5) << delta_time << std::endl;
 	ss << L"full_time: " << std::setprecision(2) << full_time << std::endl;
+	ss << L"Очки: " << score << std::endl;
 
 
 
-	text.setPosition(10, gl.getHeight() - 10 - 200);
+	text.setPosition(10, gl.getHeight() - 10 - 220);
 	text.setText(ss.str().c_str());
 
 	text.Draw();
